@@ -1,0 +1,52 @@
+{
+  "name": "copilot-chat-monitor",
+  "displayName": "Copilot Chat Size Monitor",
+  "description": "Monitor GitHub Copilot Chat session size to prevent export failures",
+  "version": "0.1.0",
+  "publisher": "outdo",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "icon": "images/icon.png",
+  "contributes": {
+    "commands": [
+      {
+        "command": "copilot-chat-monitor.refresh",
+        "title": "Copilot Chat Monitor: Refresh Size"
+      },
+      {
+        "command": "copilot-chat-monitor.showOptions",
+        "title": "Copilot Chat Monitor: Show Options"
+      }
+    ],
+    "configuration": {
+      "title": "Copilot Chat Monitor",
+      "properties": {
+        "copilotChatMonitor.cautionThresholdMB": {
+          "type": "number",
+          "default": 300,
+          "description": "Size in MB to show caution indicator (yellow warning)"
+        },
+        "copilotChatMonitor.dangerThresholdMB": {
+          "type": "number",
+          "default": 450,
+          "description": "Size in MB to show danger indicator (red warning)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.0.0"
+  }
+}
