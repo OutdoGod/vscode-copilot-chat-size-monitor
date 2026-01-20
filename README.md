@@ -11,7 +11,7 @@ A lightweight VS Code extension that monitors GitHub Copilot Chat session file s
 
 ## Features
 
-- **Status Bar Indicator:** Shows current largest session size in MB
+- **Status Bar Indicator:** Shows your active (most recently modified) chat session size in MB
 - **Visual Thresholds:**
   - ✅ Safe (< 300 MB)
   - ⚠️ Caution (300-450 MB)
@@ -62,7 +62,7 @@ Monitors chat session files stored in:
 - **Windows:** `%APPDATA%/Code/User/workspaceStorage/*/chatSessions/*.json`
 - **Linux:** `~/.config/Code/User/workspaceStorage/*/chatSessions/*.json`
 
-The extension watches ALL workspace session files and reports the largest one (your active session is typically the largest).
+The extension watches ALL workspace session files and reports the most recently modified one (your active chat session).
 
 ## Thresholds
 
