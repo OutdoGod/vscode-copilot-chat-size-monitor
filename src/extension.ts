@@ -41,7 +41,8 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 async function updateStatusBar() {
-  const session = await sessionMonitor.findCurrentSession();
+  await sessionMonitor.findAllSessions();
+  const session = sessionMonitor.getMostRecent();
   updateStatusBarWithSize(session?.sizeBytes ?? -1);
 }
 
@@ -77,31 +78,54 @@ function checkThresholdNotification(sizeBytes: number) {
 }
 
 async function showOptions() {
-  const currentSize = sessionMonitor.getCurrentSize();
-  const currentPath = sessionMonitor.getCurrentPath();
+  const topSessions = sessionMonitor.getTopSessions(5);
   
-  const options = [
-    { label: '$(export) Export Chat...', description: 'Open VS Code export dialog', command: 'workbench.action.chat.export' },
-    { label: '$(refresh) Refresh Size', description: 'Re-check session size', command: 'copilot-chat-monitor.refresh' },
-    { label: '$(gear) Open Settings', description: 'Configure thresholds', command: 'workbench.action.openSettings', args: 'copilotChatMonitor' }
-  ];
-
-  // Add info about current session
-  const infoLabel = currentPath 
-    ? `Current: ${formatSizeMB(currentSize)} MB`
-    : 'No session found';
-
-  const selected = await vscode.window.showQuickPick(options, {
-    placeHolder: `Copilot Chat Monitor - ${infoLabel}`
+  // Build options: top 5 chats + actions
+  const chatItems = topSessions.map((session, index) => {
+    const sizeMB = formatSizeMB(session.sizeBytes);
+    const indicator = getIndicator(session.sizeBytes);
+    const timeAgo = getTimeAgo(session.lastModified);
+    return {
+      label: `${indicator} ${sizeMB} MB`,
+      description: `${session.workspaceHash}... • ${timeAgo}`,
+      detail: index === 0 ? '← Most recent (active)' : undefined,
+      isChat: true,
+      session
+    };
   });
 
-  if (selected) {
+  const actionItems = [
+    { label: '$(export) Export Chat...', description: 'Open VS Code export dialog', command: 'workbench.action.chat.export', isChat: false },
+    { label: '$(refresh) Refresh', description: 'Re-check session sizes', command: 'copilot-chat-monitor.refresh', isChat: false },
+    { label: '$(gear) Settings', description: 'Configure thresholds', command: 'workbench.action.openSettings', args: 'copilotChatMonitor', isChat: false }
+  ];
+
+  const allItems = [
+    { label: 'Recent Chats', kind: vscode.QuickPickItemKind.Separator },
+    ...chatItems,
+    { label: 'Actions', kind: vscode.QuickPickItemKind.Separator },
+    ...actionItems
+  ];
+
+  const selected = await vscode.window.showQuickPick(allItems as any[], {
+    placeHolder: 'Copilot Chat Size Monitor - Top 5 Recent Chats'
+  });
+
+  if (selected && 'command' in selected) {
     if (selected.args) {
       vscode.commands.executeCommand(selected.command, selected.args);
     } else {
       vscode.commands.executeCommand(selected.command);
     }
   }
+}
+
+function getTimeAgo(date: Date): string {
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (seconds < 60) return 'just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
 }
 
 export function deactivate() {

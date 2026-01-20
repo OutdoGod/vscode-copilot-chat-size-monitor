@@ -7,11 +7,12 @@ export interface SessionInfo {
   path: string;
   sizeBytes: number;
   lastModified: Date;
+  workspaceHash: string;
 }
 
 export class SessionMonitor {
   private watcher: vscode.FileSystemWatcher | undefined;
-  private currentSession: SessionInfo | undefined;
+  private allSessions: SessionInfo[] = [];
   private onSizeChangeEmitter = new vscode.EventEmitter<number>();
   
   public readonly onSizeChange = this.onSizeChangeEmitter.event;
@@ -32,17 +33,16 @@ export class SessionMonitor {
   }
 
   /**
-   * Find all chat session files and return the largest (likely current)
-   * Monitors ALL workspaces in codegym, not just the current one
+   * Find ALL chat sessions, sorted by most recently modified
    */
-  public async findCurrentSession(): Promise<SessionInfo | undefined> {
+  public async findAllSessions(): Promise<SessionInfo[]> {
     const storagePath = this.getStoragePath();
     
     if (!fs.existsSync(storagePath)) {
-      return undefined;
+      return [];
     }
 
-    let mostRecent: SessionInfo | undefined;
+    const sessions: SessionInfo[] = [];
 
     // Search all workspace folders for chatSessions
     const workspaces = fs.readdirSync(storagePath);
@@ -55,21 +55,36 @@ export class SessionMonitor {
         const filePath = path.join(chatDir, file);
         try {
           const stats = fs.statSync(filePath);
-          if (!mostRecent || stats.mtime > mostRecent.lastModified) {
-            mostRecent = {
-              path: filePath,
-              sizeBytes: stats.size,
-              lastModified: stats.mtime
-            };
-          }
+          sessions.push({
+            path: filePath,
+            sizeBytes: stats.size,
+            lastModified: stats.mtime,
+            workspaceHash: workspace.substring(0, 8)
+          });
         } catch {
           // Skip inaccessible files
         }
       }
     }
 
-    this.currentSession = mostRecent;
-    return mostRecent;
+    // Sort by most recently modified first
+    sessions.sort((a, b) => b.lastModified.getTime() - a.lastModified.getTime());
+    this.allSessions = sessions;
+    return sessions;
+  }
+
+  /**
+   * Get top N most recent sessions
+   */
+  public getTopSessions(n: number = 5): SessionInfo[] {
+    return this.allSessions.slice(0, n);
+  }
+
+  /**
+   * Get the most recent session
+   */
+  public getMostRecent(): SessionInfo | undefined {
+    return this.allSessions[0];
   }
 
   /**
@@ -85,8 +100,9 @@ export class SessionMonitor {
     this.watcher = vscode.workspace.createFileSystemWatcher(pattern);
 
     const updateSize = async () => {
-      const session = await this.findCurrentSession();
-      this.onSizeChangeEmitter.fire(session?.sizeBytes ?? -1);
+      await this.findAllSessions();
+      const mostRecent = this.getMostRecent();
+      this.onSizeChangeEmitter.fire(mostRecent?.sizeBytes ?? -1);
     };
 
     this.watcher.onDidChange(updateSize);
@@ -98,14 +114,14 @@ export class SessionMonitor {
    * Get current session size
    */
   public getCurrentSize(): number {
-    return this.currentSession?.sizeBytes ?? -1;
+    return this.getMostRecent()?.sizeBytes ?? -1;
   }
 
   /**
    * Get current session path (for debugging)
    */
   public getCurrentPath(): string | undefined {
-    return this.currentSession?.path;
+    return this.getMostRecent()?.path;
   }
 
   /**
