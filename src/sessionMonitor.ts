@@ -42,7 +42,7 @@ export class SessionMonitor {
       return undefined;
     }
 
-    let largest: SessionInfo | undefined;
+    let mostRecent: SessionInfo | undefined;
 
     // Search all workspace folders for chatSessions
     const workspaces = fs.readdirSync(storagePath);
@@ -55,8 +55,8 @@ export class SessionMonitor {
         const filePath = path.join(chatDir, file);
         try {
           const stats = fs.statSync(filePath);
-          if (!largest || stats.size > largest.sizeBytes) {
-            largest = {
+          if (!mostRecent || stats.mtime > mostRecent.lastModified) {
+            mostRecent = {
               path: filePath,
               sizeBytes: stats.size,
               lastModified: stats.mtime
@@ -68,8 +68,8 @@ export class SessionMonitor {
       }
     }
 
-    this.currentSession = largest;
-    return largest;
+    this.currentSession = mostRecent;
+    return mostRecent;
   }
 
   /**
