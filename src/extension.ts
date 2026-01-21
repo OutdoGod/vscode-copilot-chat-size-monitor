@@ -26,9 +26,12 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   // Subscribe to size changes
-  sessionMonitor.onSizeChange((size) => {
-    updateStatusBarWithSize(size);
-    checkThresholdNotification(size);
+  sessionMonitor.onSizeChange(async () => {
+    await updateStatusBar();
+    const largest = sessionMonitor.getLargestAtRisk(THRESHOLDS.CAUTION);
+    if (largest) {
+      checkThresholdNotification(largest.sizeBytes);
+    }
   });
 
   // Initial update
@@ -42,16 +45,31 @@ export async function activate(context: vscode.ExtensionContext) {
 
 async function updateStatusBar() {
   await sessionMonitor.findAllSessions();
-  const session = sessionMonitor.getMostRecent();
-  updateStatusBarWithSize(session?.sizeBytes ?? -1);
+  
+  // Prefer showing the growing chat (user's active chat)
+  const growing = sessionMonitor.getGrowingSession();
+  const largest = sessionMonitor.getLargestAtRisk(THRESHOLDS.CAUTION);
+  
+  // Show growing chat, or largest at risk, or most recent
+  const toShow = growing || largest || sessionMonitor.getMostRecent();
+  
+  if (toShow) {
+    updateStatusBarWithSession(toShow);
+  } else {
+    statusBarItem.text = '💬 No chats';
+    statusBarItem.tooltip = 'No Copilot Chat sessions found';
+    statusBarItem.show();
+  }
 }
 
-function updateStatusBarWithSize(sizeBytes: number) {
-  const indicator = getIndicator(sizeBytes);
-  const sizeMB = formatSizeMB(sizeBytes);
+function updateStatusBarWithSession(session: import('./sessionMonitor').SessionInfo) {
+  const indicator = getIndicator(session.sizeBytes);
+  const sizeMB = formatSizeMB(session.sizeBytes);
+  const title = session.title.substring(0, 20);
+  const growthIcon = session.isGrowing ? '📝' : '💬';
   
-  statusBarItem.text = `💬 ${sizeMB} MB ${indicator}`;
-  statusBarItem.tooltip = getTooltip(sizeBytes);
+  statusBarItem.text = `${growthIcon} ${title}... ${sizeMB}MB ${indicator}`;
+  statusBarItem.tooltip = `${session.title}\n${sizeMB} MB - ${getTooltip(session.sizeBytes).split(' - ')[1] || 'Click for options'}`;
   statusBarItem.show();
 }
 
@@ -81,14 +99,15 @@ async function showOptions() {
   const topSessions = sessionMonitor.getTopSessions(5);
   
   // Build options: top 5 chats + actions
-  const chatItems = topSessions.map((session, index) => {
+  const chatItems = topSessions.map((session) => {
     const sizeMB = formatSizeMB(session.sizeBytes);
     const indicator = getIndicator(session.sizeBytes);
     const timeAgo = getTimeAgo(session.lastModified);
+    const growthIcon = session.isGrowing ? '📝 ' : '';
     return {
-      label: `${indicator} ${sizeMB} MB`,
-      description: `${session.workspaceHash}... • ${timeAgo}`,
-      detail: index === 0 ? '← Most recent (active)' : undefined,
+      label: `${indicator} ${growthIcon}${session.title}`,
+      description: `${sizeMB} MB • ${session.workspaceHash}...`,
+      detail: session.isGrowing ? '← Currently active (growing)' : timeAgo,
       isChat: true,
       session
     };
