@@ -22,7 +22,7 @@ export class SessionMonitor {
   private currentWorkspaceHash: string | undefined;
   
   // Consider a file "growing" if it grew within this time window (ms)
-  private static readonly GROWTH_WINDOW_MS = 10000; // 10 seconds
+  private static readonly GROWTH_WINDOW_MS = 15000; // 15 seconds
   
   public readonly onSizeChange = this.onSizeChangeEmitter.event;
 
@@ -59,6 +59,25 @@ export class SessionMonitor {
     }
 
     return undefined;
+  }
+
+  /**
+   * Check if a session file has no messages (empty requests array)
+   * Reads first 2KB which is enough to find the requests field
+   */
+  private isEmptySession(filePath: string): boolean {
+    try {
+      const fd = fs.openSync(filePath, 'r');
+      const buffer = Buffer.alloc(2000);
+      fs.readSync(fd, buffer, 0, 2000, 0);
+      fs.closeSync(fd);
+      const content = buffer.toString('utf8');
+      
+      // Check for empty requests array
+      return content.includes('"requests":[]') || content.includes('"requests": []');
+    } catch {
+      return false; // If we can't read, assume it's not empty
+    }
   }
 
   /**
@@ -125,6 +144,12 @@ export class SessionMonitor {
           const filePath = path.join(chatDir, file);
           try {
             const stats = fs.statSync(filePath);
+            
+            // Skip empty sessions (no messages)
+            if (this.isEmptySession(filePath)) {
+              continue;
+            }
+            
             const previousSize = this.previousSizes.get(filePath) ?? 0;
             const grewThisScan = stats.size > previousSize && previousSize > 0;
             

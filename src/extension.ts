@@ -99,15 +99,29 @@ async function showOptions() {
   const topSessions = sessionMonitor.getTopSessions(5);
   
   // Build options: top 5 chats + actions
-  const chatItems = topSessions.map((session) => {
+  const chatItems = topSessions.map((session, index) => {
     const sizeMB = formatSizeMB(session.sizeBytes);
     const indicator = getIndicator(session.sizeBytes);
     const timeAgo = getTimeAgo(session.lastModified);
     const growthIcon = session.isGrowing ? '📝 ' : '';
+    const isCurrentlyActive = index === 0; // First item is most recent
+    
+    // Build detail text
+    let detail: string;
+    if (isCurrentlyActive && session.isGrowing) {
+      detail = '← Recently active (growing)';
+    } else if (isCurrentlyActive) {
+      detail = '← Recently active';
+    } else if (session.isGrowing) {
+      detail = '← Growing';
+    } else {
+      detail = timeAgo;
+    }
+    
     return {
       label: `${indicator} ${growthIcon}${session.title}`,
       description: `${sizeMB} MB • ${session.workspaceHash}...`,
-      detail: session.isGrowing ? '← Currently active (growing)' : timeAgo,
+      detail,
       isChat: true,
       session
     };
